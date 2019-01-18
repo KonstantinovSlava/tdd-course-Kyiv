@@ -39,3 +39,12 @@ Implement chat application, that communicates via TCP sockets.
 */
 
 #include "mocks.h"
+
+
+// Architectures //
+// Connection decides how to as server, start as client
+// Handshake - client, server
+// Client
+// Server
+// UI - "me: ", input message, display message
+// Sending, receiving
