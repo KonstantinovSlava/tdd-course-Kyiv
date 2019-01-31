@@ -52,27 +52,46 @@ Implement chat application, that communicates via TCP sockets.
 // UI - "me: ", input message, display message
 // Sending, receiving
 
+class ChatApp
+{
+public:
+    ChatApp(std::shared_ptr<IGui> gui)
+        : m_gui(gui)
+    {
+    }
+
+    void PrintMe()
+    {
+        m_gui->Write("me:");
+    }
+
+private:
+    std::shared_ptr<IGui> m_gui;
+};
+
 TEST(Cleanroom, StartAsServer)
 {
     SocketWrapperMock socketMock;
     ISocketWrapperPtr socketPtr = nullptr;
+    std::string buffer;
 
     EXPECT_CALL(socketMock, Bind(_,_));
     EXPECT_CALL(socketMock, Listen());
     EXPECT_CALL(socketMock, Accept()).WillOnce(Return(std::make_shared<SocketWrapperMock>()));
 
-    EXPECT_TRUE(utils::Connection(socketMock, socketPtr));
+    EXPECT_TRUE(utils::Connection(socketMock, socketPtr, buffer));
 }
 
 TEST(Cleanroom, StartAsClient)
 {
     SocketWrapperMock socketMock;
     ISocketWrapperPtr socketPtr = nullptr;
+    std::string buffer;
 
     EXPECT_CALL(socketMock, Bind(_,_)).WillOnce(Throw(std::runtime_error("")));
     EXPECT_CALL(socketMock, Connect(_,_)).WillOnce(Return(std::make_shared<SocketWrapperMock>()));
 
-    EXPECT_FALSE(utils::Connection(socketMock, socketPtr));
+    EXPECT_FALSE(utils::Connection(socketMock, socketPtr, buffer));
 }
 
 TEST(Cleanroom, ClientHandshake)
@@ -80,13 +99,14 @@ TEST(Cleanroom, ClientHandshake)
     SocketWrapperMock socketMock;
     ISocketWrapperPtr socketPtr = nullptr;
     std::shared_ptr<SocketWrapperMock> clientSocketMock = std::make_shared<SocketWrapperMock>();
+    std::string buffer;
 
     EXPECT_CALL(socketMock, Bind(_,_)).WillOnce(Throw(std::runtime_error("")));
     EXPECT_CALL(socketMock, Connect(_,_)).WillOnce(Return(clientSocketMock));
     EXPECT_CALL(*clientSocketMock.get(), Write(utils::GetClientHello())).Times(1);
     EXPECT_CALL(*clientSocketMock.get(), Read(_)).Times(1);
 
-    EXPECT_FALSE(utils::Connection(socketMock, socketPtr));
+    EXPECT_FALSE(utils::Connection(socketMock, socketPtr, buffer));
 
     EXPECT_NE(nullptr, socketPtr);
 }
@@ -96,6 +116,7 @@ TEST(Cleanroom, ServerHandshake)
     SocketWrapperMock socketMock;
     ISocketWrapperPtr socketPtr = nullptr;
     std::shared_ptr<SocketWrapperMock> serverSocketMock = std::make_shared<SocketWrapperMock>();
+    std::string buffer;
 
     {
         InSequence sequence;
@@ -110,27 +131,63 @@ TEST(Cleanroom, ServerHandshake)
         EXPECT_CALL(*serverSocketMock.get(), Read(_)).Times(1);
         EXPECT_CALL(*serverSocketMock.get(), Write(utils::GetServerHello())).Times(1);
     }
-    EXPECT_TRUE(utils::Connection(socketMock, socketPtr));
+    EXPECT_TRUE(utils::Connection(socketMock, socketPtr, buffer));
 
     EXPECT_NE(nullptr, socketPtr);
 }
 
 TEST(Cleanroom, ParseServerNickname)
 {
-    SocketWrapperMock socketMock;
-    ISocketWrapperPtr socketPtr = nullptr;
+    std::shared_ptr<SocketWrapperMock> socketMock = std::make_shared<SocketWrapperMock>();
     std::shared_ptr<SocketWrapperMock> clientSocketMock = std::make_shared<SocketWrapperMock>();
 
-    ConnecionWrapper wrapper (socketMock);
-
-    EXPECT_CALL(socketMock, Bind(_,_)).WillOnce(Throw(std::runtime_error("")));
-    EXPECT_CALL(socketMock, Connect(_,_)).WillOnce(Return(clientSocketMock));
+    EXPECT_CALL(*socketMock.get(), Bind(_,_)).WillOnce(Throw(std::runtime_error("")));
+    EXPECT_CALL(*socketMock.get(), Connect(_,_)).WillOnce(Return(clientSocketMock));
     EXPECT_CALL(*clientSocketMock.get(), Write(utils::GetClientHello())).Times(1);
-    EXPECT_CALL(*clientSocketMock.get(), Read(_)).Times(1);
+    EXPECT_CALL(*clientSocketMock.get(), Read(_)).WillOnce(SetArgReferee<0>(utils::GetServerHello()));
 
-    EXPECT_FALSE(utils::Connection(socketMock, socketPtr));
+    ConnecionWrapper wrapper(socketMock);
 
     EXPECT_EQ(wrapper.getNickname(), "server");
+}
 
-    EXPECT_NE(nullptr, socketPtr);
+TEST(Cleanroom, ParseClientNickname)
+{
+    std::shared_ptr<SocketWrapperMock> socketMock = std::make_shared<SocketWrapperMock>();
+    std::shared_ptr<SocketWrapperMock> serverSocketMock = std::make_shared<SocketWrapperMock>();
+
+    EXPECT_CALL(*socketMock.get(), Bind(_,_));
+    EXPECT_CALL(*socketMock.get(), Listen());
+    EXPECT_CALL(*socketMock.get(), Accept()).WillOnce(Return(serverSocketMock));
+    EXPECT_CALL(*serverSocketMock.get(), Read(_)).WillOnce(SetArgReferee<0>(utils::GetClientHello()));
+    EXPECT_CALL(*serverSocketMock.get(), Write(utils::GetServerHello())).Times(1);
+
+    ConnecionWrapper wrapper(socketMock);
+
+    EXPECT_EQ(wrapper.getNickname(), "client");
+}
+
+TEST(Cleanroom, GUIPromptMe)
+{
+    std::shared_ptr<GuiMock> gui = std::make_shared<GuiMock>();
+
+    EXPECT_CALL(*gui.get(), Write("me:")).Times(1);
+    ChatApp app(gui);
+    app.PrintMe();
+}
+
+TEST(Cleanroom, GUIInput)
+{
+    std::shared_ptr<GuiMock> gui = std::make_shared<GuiMock>();
+    std::shared_ptr<SocketWrapperMock> socketMock = std::make_shared<SocketWrapperMock>();
+    std::shared_ptr<SocketWrapperMock> clientSocketMock = std::make_shared<SocketWrapperMock>();
+
+    EXPECT_CALL(*socketMock.get(), Bind(_,_)).WillOnce(Throw(std::runtime_error("")));
+    EXPECT_CALL(*socketMock.get(), Connect(_,_)).WillOnce(Return(clientSocketMock));
+    EXPECT_CALL(*gui.get(), Read()).WillOnce(Return("Hello"));
+    EXPECT_CALL(*clientSocketMock.get(), Write("Hello"));
+
+    ConnecionWrapper wrapper(socketMock);
+    ChatApp app(gui, wrapper);
+    app.sendMsg();
 }

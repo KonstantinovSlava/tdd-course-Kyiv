@@ -20,9 +20,8 @@ bool utils::TryBind(ISocketWrapper &socket)
     return true;
 }
 
-void utils::Handshake(ISocketWrapperPtr &sockPtr, bool isServer)
+void utils::Handshake(ISocketWrapperPtr &sockPtr, bool isServer, std::string &buffer)
 {
-    std::string buffer;
     if (isServer)
     {
         sockPtr->Read(buffer);
@@ -35,7 +34,7 @@ void utils::Handshake(ISocketWrapperPtr &sockPtr, bool isServer)
     }
 }
 
-bool utils::Connection (ISocketWrapper &socket, ISocketWrapperPtr &sockPtr)
+bool utils::Connection (ISocketWrapper &socket, ISocketWrapperPtr &sockPtr, std::string &buffer)
 {
     bool isServer = TryBind(socket);
     if (isServer)
@@ -48,7 +47,7 @@ bool utils::Connection (ISocketWrapper &socket, ISocketWrapperPtr &sockPtr)
         sockPtr = socket.Connect(ip, port);
     }
 
-    utils::Handshake(sockPtr, isServer);
+    utils::Handshake(sockPtr, isServer, buffer);
 
     return isServer;
 }
