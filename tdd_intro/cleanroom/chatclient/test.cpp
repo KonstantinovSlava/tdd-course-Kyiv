@@ -1,5 +1,8 @@
 ﻿#include <gtest/gtest.h>
 
+#include "connecionwrapper.h"
+#include "utils.h"
+
 using namespace testing;
 /*
 Implement chat application, that communicates via TCP sockets.
@@ -49,59 +52,6 @@ Implement chat application, that communicates via TCP sockets.
 // UI - "me: ", input message, display message
 // Sending, receiving
 
-const std::string ip = "127.0.0.1";
-const int port = 4444;
-const std::string clientHello = "client:!HELLO";
-const std::string serverHello = "server:!HELLO";
-
-bool TryBind(ISocketWrapper &socket)
-{
-    try
-    {
-        socket.Bind(ip, port);
-    }
-    catch (std::runtime_error &)
-    {
-        return false;
-    }
-
-    return true;
-}
-
-void Handshake(ISocketWrapperPtr &sockPtr, bool isServer)
-{
-    std::string buffer;
-    if (isServer)
-    {
-        sockPtr->Read(buffer);
-        sockPtr->Write(serverHello);
-    }
-    else
-    {
-        sockPtr->Write(clientHello);
-        sockPtr->Read(buffer);
-    }
-}
-
-bool Connection (ISocketWrapper &socket, ISocketWrapperPtr &sockPtr)
-{
-    bool isServer = TryBind(socket);
-    if (isServer)
-    {
-        socket.Listen();
-        sockPtr = socket.Accept();
-    }
-    else
-    {
-        sockPtr = socket.Connect(ip, port);
-    }
-
-    Handshake(sockPtr, isServer);
-
-    return isServer;
-}
-
-
 TEST(Cleanroom, StartAsServer)
 {
     SocketWrapperMock socketMock;
@@ -111,7 +61,7 @@ TEST(Cleanroom, StartAsServer)
     EXPECT_CALL(socketMock, Listen());
     EXPECT_CALL(socketMock, Accept()).WillOnce(Return(std::make_shared<SocketWrapperMock>()));
 
-    EXPECT_TRUE(Connection(socketMock, socketPtr));
+    EXPECT_TRUE(utils::Connection(socketMock, socketPtr));
 }
 
 TEST(Cleanroom, StartAsClient)
@@ -122,7 +72,7 @@ TEST(Cleanroom, StartAsClient)
     EXPECT_CALL(socketMock, Bind(_,_)).WillOnce(Throw(std::runtime_error("")));
     EXPECT_CALL(socketMock, Connect(_,_)).WillOnce(Return(std::make_shared<SocketWrapperMock>()));
 
-    EXPECT_FALSE(Connection(socketMock, socketPtr));
+    EXPECT_FALSE(utils::Connection(socketMock, socketPtr));
 }
 
 TEST(Cleanroom, ClientHandshake)
@@ -133,10 +83,10 @@ TEST(Cleanroom, ClientHandshake)
 
     EXPECT_CALL(socketMock, Bind(_,_)).WillOnce(Throw(std::runtime_error("")));
     EXPECT_CALL(socketMock, Connect(_,_)).WillOnce(Return(clientSocketMock));
-    EXPECT_CALL(*clientSocketMock.get(), Write(clientHello)).Times(1);
+    EXPECT_CALL(*clientSocketMock.get(), Write(utils::GetClientHello())).Times(1);
     EXPECT_CALL(*clientSocketMock.get(), Read(_)).Times(1);
 
-    EXPECT_FALSE(Connection(socketMock, socketPtr));
+    EXPECT_FALSE(utils::Connection(socketMock, socketPtr));
 
     EXPECT_NE(nullptr, socketPtr);
 }
@@ -148,15 +98,19 @@ TEST(Cleanroom, ServerHandshake)
     std::shared_ptr<SocketWrapperMock> serverSocketMock = std::make_shared<SocketWrapperMock>();
 
     {
-        //InSequence sequence;
+        InSequence sequence;
 
         EXPECT_CALL(socketMock, Bind(_,_));
         EXPECT_CALL(socketMock, Listen());
         EXPECT_CALL(socketMock, Accept()).WillOnce(Return(serverSocketMock));
-        EXPECT_CALL(*serverSocketMock.get(), Read(_)).Times(1);
-        EXPECT_CALL(*serverSocketMock.get(), Write(serverHello)).Times(1);
     }
-    EXPECT_TRUE(Connection(socketMock, socketPtr));
+    {
+        InSequence sequence;
+
+        EXPECT_CALL(*serverSocketMock.get(), Read(_)).Times(1);
+        EXPECT_CALL(*serverSocketMock.get(), Write(utils::GetServerHello())).Times(1);
+    }
+    EXPECT_TRUE(utils::Connection(socketMock, socketPtr));
 
     EXPECT_NE(nullptr, socketPtr);
 }
@@ -171,10 +125,10 @@ TEST(Cleanroom, ParseServerNickname)
 
     EXPECT_CALL(socketMock, Bind(_,_)).WillOnce(Throw(std::runtime_error("")));
     EXPECT_CALL(socketMock, Connect(_,_)).WillOnce(Return(clientSocketMock));
-    EXPECT_CALL(*clientSocketMock.get(), Write(clientHello)).Times(1);
+    EXPECT_CALL(*clientSocketMock.get(), Write(utils::GetClientHello())).Times(1);
     EXPECT_CALL(*clientSocketMock.get(), Read(_)).Times(1);
 
-    EXPECT_FALSE(Connection(socketMock, socketPtr));
+    EXPECT_FALSE(utils::Connection(socketMock, socketPtr));
 
     EXPECT_EQ(wrapper.getNickname(), "server");
 
