@@ -2,6 +2,7 @@
 #include <gtest/gtest.h>
 #include "socketwrapper.h"
 
+/*
 TEST(SocketWrapperTest, EstablishConnection)
 {
     SocketWrapper listener;
@@ -24,4 +25,4 @@ TEST(SocketWrapperTest, EstablishConnection)
     client.Read(str);
 
     EXPECT_STREQ(testPhrase, str.c_str());
-}
+} */

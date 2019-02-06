@@ -5,22 +5,17 @@ CONFIG += console c++11
 CONFIG -= app_bundle
 CONFIG -= qt
 
+INCLUDEPATH += ../chatclientstatic/
+
 SOURCES += \
     test.cpp \
-    socketwrapper.cpp \
-    socketwrappertest.cpp \
-    utils.cpp \
-    connecionwrapper.cpp
+    socketwrappertest.cpp
 
 LIBS += \
     Ws2_32.lib \
     Mswsock.lib \
-    AdvApi32.lib
+    AdvApi32.lib \
+    -L../chatclientstatic/debug -lchatclientstatic
 
 HEADERS += \
-    socketwrapper.h \
-    mocks.h \
-    isocketwrapper.h \
-    igui.h \
-    utils.h \
-    connecionwrapper.h
+    mocks.h

@@ -114,7 +114,7 @@ ISocketWrapperPtr SocketWrapper::Connect(const std::string& addr, int16_t port)
     {
         throw std::runtime_error(GetExceptionString("Failed to connect to server.", WSAGetLastError()));
     }
-    return ISocketWrapperPtr(new SocketWrapper(other));
+    return ISocketWrapperPtr(new SocketWrapper(/*other*/m_socket));
 }
 
 void SocketWrapper::Read(std::string& buffer)
@@ -130,7 +130,7 @@ void SocketWrapper::Read(std::string& buffer)
 
 void SocketWrapper::Write(const std::string& buffer)
 {
-    for (int dataSent = 0; dataSent < buffer.size();)
+    for (size_t dataSent = 0; dataSent < buffer.size();)
     {
         dataSent += send(m_socket, buffer.data() + dataSent, static_cast<int>(buffer.size() - dataSent), 0);
         if (SOCKET_ERROR == dataSent)

@@ -2,6 +2,7 @@
 
 #include "connecionwrapper.h"
 #include "utils.h"
+#include "ChatApp.h"
 
 using namespace testing;
 /*
@@ -51,23 +52,6 @@ Implement chat application, that communicates via TCP sockets.
 // Server
 // UI - "me: ", input message, display message
 // Sending, receiving
-
-class ChatApp
-{
-public:
-    ChatApp(std::shared_ptr<IGui> gui)
-        : m_gui(gui)
-    {
-    }
-
-    void PrintMe()
-    {
-        m_gui->Write("me:");
-    }
-
-private:
-    std::shared_ptr<IGui> m_gui;
-};
 
 TEST(Cleanroom, StartAsServer)
 {
@@ -170,9 +154,18 @@ TEST(Cleanroom, ParseClientNickname)
 TEST(Cleanroom, GUIPromptMe)
 {
     std::shared_ptr<GuiMock> gui = std::make_shared<GuiMock>();
+    std::shared_ptr<SocketWrapperMock> socketMock = std::make_shared<SocketWrapperMock>();
+    std::shared_ptr<SocketWrapperMock> serverSocketMock = std::make_shared<SocketWrapperMock>();
 
+
+    EXPECT_CALL(*socketMock.get(), Bind(_,_));
+    EXPECT_CALL(*socketMock.get(), Listen());
+    EXPECT_CALL(*socketMock.get(), Accept()).WillOnce(Return(serverSocketMock));
     EXPECT_CALL(*gui.get(), Write("me:")).Times(1);
-    ChatApp app(gui);
+
+    ConnecionWrapper wrapper(socketMock);
+
+    ChatApp app(gui, wrapper);
     app.PrintMe();
 }
 
@@ -184,10 +177,86 @@ TEST(Cleanroom, GUIInput)
 
     EXPECT_CALL(*socketMock.get(), Bind(_,_)).WillOnce(Throw(std::runtime_error("")));
     EXPECT_CALL(*socketMock.get(), Connect(_,_)).WillOnce(Return(clientSocketMock));
+
+    EXPECT_CALL(*clientSocketMock.get(), Write(utils::GetClientHello())).Times(1);
+    EXPECT_CALL(*clientSocketMock.get(), Read(_)).Times(1);
+
     EXPECT_CALL(*gui.get(), Read()).WillOnce(Return("Hello"));
     EXPECT_CALL(*clientSocketMock.get(), Write("Hello"));
 
     ConnecionWrapper wrapper(socketMock);
     ChatApp app(gui, wrapper);
-    app.sendMsg();
+    app.SendMsg();
+}
+
+TEST(Cleanroom, GUIDisplayMessage)
+{
+    std::shared_ptr<GuiMock> gui = std::make_shared<GuiMock>();
+    std::shared_ptr<SocketWrapperMock> socketMock = std::make_shared<SocketWrapperMock>();
+    std::shared_ptr<SocketWrapperMock> clientSocketMock = std::make_shared<SocketWrapperMock>();
+
+    EXPECT_CALL(*socketMock.get(), Bind(_,_)).WillOnce(Throw(std::runtime_error("")));
+    EXPECT_CALL(*socketMock.get(), Connect(_,_)).WillOnce(Return(clientSocketMock));
+
+    EXPECT_CALL(*clientSocketMock.get(), Write(utils::GetClientHello())).Times(1);
+
+    EXPECT_CALL(*clientSocketMock.get(), Read(_)).WillOnce(SetArgReferee<0>(utils::GetClientHello())).WillOnce(SetArgReferee<0>("Hello"));
+    EXPECT_CALL(*gui.get(), Write("Hello"));
+
+    ConnecionWrapper wrapper(socketMock);
+    ChatApp app(gui, wrapper);
+    app.DisplayMsg();
+}
+
+TEST(Cleanroom, GUIStartChatSClient)
+{
+    std::shared_ptr<GuiMock> gui = std::make_shared<GuiMock>();
+    std::shared_ptr<SocketWrapperMock> socketMock = std::make_shared<SocketWrapperMock>();
+    std::shared_ptr<SocketWrapperMock> clientSocketMock = std::make_shared<SocketWrapperMock>();
+
+    EXPECT_CALL(*socketMock.get(), Bind(_,_)).WillOnce(Throw(std::runtime_error("")));
+    EXPECT_CALL(*socketMock.get(), Connect(_,_)).WillOnce(Return(clientSocketMock));
+
+    EXPECT_CALL(*clientSocketMock.get(), Write(utils::GetClientHello())).Times(1);
+
+    EXPECT_CALL(*gui.get(), Read()).WillOnce(Return("Hello"));
+    EXPECT_CALL(*clientSocketMock.get(), Write("Hello"));
+
+    EXPECT_CALL(*clientSocketMock.get(), Read(_)).WillOnce(SetArgReferee<0>(utils::GetClientHello())).WillOnce(SetArgReferee<0>("Hello"));
+    EXPECT_CALL(*gui.get(), Write("Hello"));
+
+    ConnecionWrapper wrapper(socketMock);
+    ChatApp app(gui, wrapper);
+    app.StartChat();
+}
+
+TEST(Cleanroom, GUIStartChatSServer)
+{
+    std::shared_ptr<GuiMock> gui = std::make_shared<GuiMock>();
+    std::shared_ptr<SocketWrapperMock> socketMock = std::make_shared<SocketWrapperMock>();
+    ISocketWrapperPtr socketPtr = nullptr;
+    std::shared_ptr<SocketWrapperMock> serverSocketMock = std::make_shared<SocketWrapperMock>();
+    std::string buffer;
+
+    {
+        InSequence sequence;
+
+        EXPECT_CALL(*socketMock.get(), Bind(_,_));
+        EXPECT_CALL(*socketMock.get(), Listen());
+        EXPECT_CALL(*socketMock.get(), Accept()).WillOnce(Return(serverSocketMock));
+    }
+    {
+        //InSequence sequence;
+
+        EXPECT_CALL(*serverSocketMock.get(), Read(_)).WillOnce(SetArgReferee<0>(utils::GetClientHello())).WillOnce(SetArgReferee<0>("Hello"));
+        EXPECT_CALL(*serverSocketMock.get(), Write(utils::GetServerHello()));
+    }
+
+    EXPECT_CALL(*gui.get(), Write("Hello"));
+    EXPECT_CALL(*gui.get(), Read()).WillOnce(Return("Hello"));
+    EXPECT_CALL(*serverSocketMock.get(), Write("Hello"));
+
+    ConnecionWrapper wrapper(socketMock);
+    ChatApp app(gui, wrapper);
+    app.StartChat();
 }

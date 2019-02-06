@@ -1,4 +1,6 @@
 TEMPLATE = subdirs
 
 SUBDIRS += \
-    chatclient
+    chatclient \
+    chatclientstatic \
+    chatclientdemo
